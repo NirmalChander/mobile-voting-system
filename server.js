@@ -75,14 +75,6 @@ async function fetchVoterByEpic(epic) {
   return null;
 }
 
-async function fetchVoterByAadhaar(aadhaar) {
-  const result = await supabaseRequest('voters', 'GET', null, `aadhaar=eq.${encodeURIComponent(aadhaar)}&select=*`);
-  if (result.status >= 200 && result.status < 300 && Array.isArray(result.body) && result.body.length > 0) {
-    return result.body[0];
-  }
-  return null;
-}
-
 // Get users endpoint
 app.get('/api/users', async (req, res) => {
   try {
@@ -120,12 +112,6 @@ app.post('/api/register-voter', async (req, res) => {
 
     // Helper to check EPIC existence
     const epicExists = async (candidate) => fetchVoterByEpic(candidate);
-
-    const existingByAadhaar = await fetchVoterByAadhaar(aadhaar);
-    if (existingByAadhaar) {
-      console.log('[register-voter] existing voter found by aadhaar:', existingByAadhaar);
-      return res.json({ success: true, data: [existingByAadhaar] });
-    }
 
     // If epic provided by client, prefer server ownership: if it exists return it
     if (epic) {
@@ -185,7 +171,7 @@ app.post('/api/register-voter', async (req, res) => {
         (typeof errCode === 'string' && errCode.toString().includes('duplicate')) ||
         (result.status === 409);
       if (isDuplicate) {
-        const existing = (await fetchVoterByAadhaar(aadhaar)) || (await fetchVoterByEpic(epic));
+        const existing = await fetchVoterByEpic(epic);
         if (existing) {
           console.log('[register-voter] duplicate insert resolved to existing voter:', existing);
           res.json({ success: true, data: [existing] });

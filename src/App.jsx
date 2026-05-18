@@ -109,7 +109,7 @@ function App() {
           const usersRes = await fetch('http://localhost:5000/api/users');
           if (usersRes.ok) {
             const usersJson = await usersRes.json();
-            const existing = (usersJson.data || []).find(u => u.aadhaar === voterData.aadhaar || u.name === voterData.name);
+            const existing = (usersJson.data || []).find(u => u.name === voterData.name);
             if (existing) {
               const merged = { ...existing };
               if (voterData.faceDescriptor && !merged.faceDescriptor) {
