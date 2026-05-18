@@ -67,6 +67,14 @@ function supabaseRequest(table, method = 'GET', body = null, query = '') {
   });
 }
 
+async function fetchVoterByEpic(epic) {
+  const result = await supabaseRequest('voters', 'GET', null, `epic=eq.${encodeURIComponent(epic)}&select=*`);
+  if (result.status >= 200 && result.status < 300 && Array.isArray(result.body) && result.body.length > 0) {
+    return result.body[0];
+  }
+  return null;
+}
+
 // Get users endpoint
 app.get('/api/users', async (req, res) => {
   try {
@@ -103,11 +111,7 @@ app.post('/api/register-voter', async (req, res) => {
     }
 
     // Helper to check EPIC existence
-    const epicExists = async (candidate) => {
-      const check = await supabaseRequest('voters', 'GET', null, `epic=eq.${encodeURIComponent(candidate)}&select=*`);
-      if (check.status >= 200 && check.status < 300 && Array.isArray(check.body) && check.body.length > 0) return check.body[0];
-      return null;
-    };
+    const epicExists = async (candidate) => fetchVoterByEpic(candidate);
 
     // If epic provided by client, prefer server ownership: if it exists return it
     if (epic) {
@@ -136,15 +140,34 @@ app.post('/api/register-voter', async (req, res) => {
     const result = await supabaseRequest('voters', 'POST', { epic, name, aadhaar, faceregistered: !!faceRegistered });
     
     if (result.status >= 200 && result.status < 300) {
-      res.json({ success: true, data: result.body });
+      let voterRow = null;
+
+      if (Array.isArray(result.body) && result.body.length > 0) {
+        voterRow = result.body[0];
+      } else if (result.body && !Array.isArray(result.body)) {
+        voterRow = result.body;
+      }
+
+      if (!voterRow) {
+        voterRow = await fetchVoterByEpic(epic);
+      }
+
+      if (voterRow) {
+        console.log('[register-voter] normalized voter row:', voterRow);
+        res.json({ success: true, data: [voterRow] });
+        return;
+      }
+
+      console.warn('[register-voter] insert succeeded but no voter row was returned or found');
+      res.json({ success: true, data: [] });
     } else {
       // Handle duplicate key race: fetch existing record and return it
       const errCode = result.body && (result.body.code || result.body.message);
       const isDuplicate = errCode === '23505' || errCode === 23505 || (typeof errCode === 'string' && errCode.toString().includes('duplicate'));
       if (isDuplicate) {
-        const existing = await supabaseRequest('voters', 'GET', null, `epic=eq.${encodeURIComponent(epic)}&select=*`);
-        if (existing.status >= 200 && existing.status < 300 && Array.isArray(existing.body)) {
-          res.json({ success: true, data: existing.body });
+        const existing = await fetchVoterByEpic(epic);
+        if (existing) {
+          res.json({ success: true, data: [existing] });
           return;
         }
       }

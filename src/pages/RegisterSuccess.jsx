@@ -19,7 +19,7 @@ export default function RegisterSuccess() {
   }
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(state.epic);
+    navigator.clipboard.writeText(epic);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
