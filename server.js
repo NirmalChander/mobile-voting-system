@@ -28,25 +28,35 @@ function supabaseRequest(table, method = 'GET', body = null, query = '') {
   return new Promise((resolve, reject) => {
     const url = new URL(`${SUPABASE_URL}/rest/v1/${table}${query ? '?' + query : ''}`);
     
-    const options = {
-      method: method,
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
+    const headers = {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
     };
+
+    // Ask Supabase to return the created/updated row and merge duplicates for write operations
+    if (['POST', 'PATCH', 'PUT'].includes(method.toUpperCase())) {
+      headers['Prefer'] = 'return=representation,resolution=merge-duplicates';
+    }
+
+    const options = { method: method, headers };
 
     const req = https.request(url, options, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
-        resolve({
-          status: res.statusCode,
-          body: data ? JSON.parse(data) : null
+          let parsed = null;
+          try {
+            parsed = data ? JSON.parse(data) : null;
+          } catch (e) {
+            parsed = null;
+          }
+          resolve({
+            status: res.statusCode,
+            body: parsed
+          });
         });
-      });
     });
 
     req.on('error', reject);
@@ -81,19 +91,58 @@ app.post('/api/register-voter', async (req, res) => {
       return res.status(500).json({ success: false, message: 'Supabase not configured' });
     }
     
-    const { epic, name, aadhaar, faceRegistered } = req.body;
-    
-    if (!epic || !name || !aadhaar) {
+    let { epic, name, aadhaar, faceRegistered } = req.body;
+
+    if (!name || !aadhaar) {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
-    
-    const result = await supabaseRequest('voters', 'POST', 
-      { epic, name, aadhaar, faceregistered: faceRegistered || false }
-    );
+
+    // Helper to check EPIC existence
+    const epicExists = async (candidate) => {
+      const check = await supabaseRequest('voters', 'GET', null, `epic=eq.${encodeURIComponent(candidate)}&select=*`);
+      if (check.status >= 200 && check.status < 300 && Array.isArray(check.body) && check.body.length > 0) return check.body[0];
+      return null;
+    };
+
+    // If epic provided by client, prefer server ownership: if it exists return it
+    if (epic) {
+      const existing = await epicExists(epic);
+      if (existing) {
+        return res.json({ success: true, data: [existing] });
+      }
+    }
+
+    // Generate server-side EPIC if not provided or if client-generated pattern detected
+    const shouldGenerate = !epic || /^IND\d+$/.test(epic);
+    if (shouldGenerate) {
+      let attempts = 0;
+      let generated = null;
+      while (attempts < 10) {
+        const candidate = `IND${Math.floor(Math.random() * 9000000) + 1000000}`;
+        const exists = await epicExists(candidate);
+        if (!exists) { generated = candidate; break; }
+        attempts++;
+      }
+      if (!generated) return res.status(500).json({ success: false, message: 'Failed to generate unique EPIC' });
+      epic = generated;
+    }
+
+    // Insert new voter
+    const result = await supabaseRequest('voters', 'POST', { epic, name, aadhaar, faceregistered: !!faceRegistered });
     
     if (result.status >= 200 && result.status < 300) {
       res.json({ success: true, data: result.body });
     } else {
+      // Handle duplicate key race: fetch existing record and return it
+      const errCode = result.body && (result.body.code || result.body.message);
+      const isDuplicate = errCode === '23505' || errCode === 23505 || (typeof errCode === 'string' && errCode.toString().includes('duplicate'));
+      if (isDuplicate) {
+        const existing = await supabaseRequest('voters', 'GET', null, `epic=eq.${encodeURIComponent(epic)}&select=*`);
+        if (existing.status >= 200 && existing.status < 300 && Array.isArray(existing.body)) {
+          res.json({ success: true, data: existing.body });
+          return;
+        }
+      }
       res.status(result.status).json({ success: false, message: 'Failed to register voter', error: result.body });
     }
   } catch (error) {
@@ -132,10 +181,13 @@ app.post('/api/votes', async (req, res) => {
     if (!epic || !candidateId) {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
-    
-    const result = await supabaseRequest('votes', 'POST', 
-      { epic, candidateid: candidateId, timestamp: timestamp || new Date().toISOString() }
-    );
+    // Prevent double voting: check if epic already has a vote
+    const existingVote = await supabaseRequest('votes', 'GET', null, `epic=eq.${encodeURIComponent(epic)}&select=*`);
+    if (existingVote.status >= 200 && existingVote.status < 300 && Array.isArray(existingVote.body) && existingVote.body.length > 0) {
+      return res.status(409).json({ success: false, message: 'This EPIC has already cast a vote' });
+    }
+
+    const result = await supabaseRequest('votes', 'POST', { epic, candidateid: candidateId, timestamp: timestamp || new Date().toISOString() });
     
     if (result.status >= 200 && result.status < 300) {
       res.json({ success: true, data: result.body, message: 'Vote cast successfully' });

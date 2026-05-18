@@ -52,16 +52,24 @@ export default function FaceRegistration({ temporaryRegistrationData, onRegister
         registeredRef.current = true;
         setStage('success');
         setScanMessage('Face Enrolled Successfully!');
-        const generatedEpic = `IND${Math.floor(Math.random() * 9000000) + 1000000}`;
-        setEpic(generatedEpic);
 
-        onRegisterVoter({
-          ...temporaryRegistrationData,
-          epic: generatedEpic,
+        // Prepare payload without client-generated EPIC; server will create one
+        const payload = {
+          name: temporaryRegistrationData.name,
+          aadhaar: temporaryRegistrationData.aadhaar,
           faceRegistered: true,
           faceDescriptor: Array.from(detection.descriptor),
           registeredAt: new Date().toISOString()
-        });
+        };
+
+        try {
+          const created = await onRegisterVoter(payload);
+          if (created && created.epic) {
+            setEpic(created.epic);
+          }
+        } catch (err) {
+          console.error('Registration API failed:', err);
+        }
       }
     } catch (err) {
       console.error('Face detection error:', err);

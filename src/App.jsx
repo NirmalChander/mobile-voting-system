@@ -55,50 +55,49 @@ function App() {
 
   const handleRegisterVoter = async (voterData) => {
     try {
-      // Call backend API to register voter
+      // Call backend API to register voter (server will generate EPIC)
       const response = await fetch('http://localhost:5000/api/register-voter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          epic: voterData.epic,
           name: voterData.name,
           aadhaar: voterData.aadhaar,
           faceRegistered: voterData.faceRegistered
         })
       });
-      
+
       if (response.ok) {
         const resJson = await response.json();
-        // Supabase returns an array of inserted rows under `data`
-        const created = resJson.data && resJson.data.length ? resJson.data[0] : null;
+        // resJson.data may be an array
+        const created = Array.isArray(resJson.data) && resJson.data.length ? resJson.data[0] : resJson.data || null;
         if (created) {
           setVoters(prev => [...prev, created]);
+          return created;
         } else {
           setVoters(prev => [...prev, voterData]);
+          return voterData;
         }
       } else {
-        // If conflict, try to fetch existing voter from backend
+        // Handle conflict by refetching existing user
         if (response.status === 409) {
-          try {
-            const usersRes = await fetch('http://localhost:5000/api/users');
-            if (usersRes.ok) {
-              const usersJson = await usersRes.json();
-              const existing = (usersJson.data || []).find(u => u.epic === voterData.epic);
-              if (existing) {
-                setVoters(prev => [...prev, existing]);
-                return;
-              }
+          const usersRes = await fetch('http://localhost:5000/api/users');
+          if (usersRes.ok) {
+            const usersJson = await usersRes.json();
+            const existing = (usersJson.data || []).find(u => u.aadhaar === voterData.aadhaar || u.name === voterData.name);
+            if (existing) {
+              setVoters(prev => [...prev, existing]);
+              return existing;
             }
-          } catch (err) {
-            console.error('Error fetching users after conflict:', err);
           }
         }
         console.error('Failed to register voter in backend');
+        return null;
       }
     } catch (error) {
       console.error('Error registering voter:', error);
       // Still update local state even if backend fails (graceful fallback)
       setVoters(prev => [...prev, voterData]);
+      return voterData;
     }
   };
 
