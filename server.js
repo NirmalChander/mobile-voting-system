@@ -230,11 +230,29 @@ app.post('/api/votes', async (req, res) => {
       return res.status(409).json({ success: false, message: 'This EPIC has already cast a vote' });
     }
 
-    const result = await supabaseRequest('votes', 'POST', { epic, candidateid: candidateId, timestamp: timestamp || new Date().toISOString() });
-    
+    // Ensure the EPIC exists in voters to avoid FK violations
+    const voterRow = await fetchVoterByEpic(epic);
+    if (!voterRow) {
+      console.warn('[cast-vote] attempted vote for missing EPIC:', epic);
+      return res.status(400).json({ success: false, message: 'EPIC not found. Please register first.' });
+    }
+
+    // Attempt to insert the vote and surface Supabase response for debugging
+    console.log('[cast-vote] inserting vote for epic=', epic, 'candidateId=', candidateId);
+
+    let result;
+    try {
+      result = await supabaseRequest('votes', 'POST', { epic, candidateid: candidateId, timestamp: timestamp || new Date().toISOString() });
+    } catch (err) {
+      console.error('[cast-vote] supabaseRequest threw:', err);
+      return res.status(500).json({ success: false, message: 'Internal error calling database', error: err.message || String(err) });
+    }
+
+    console.log('[cast-vote] supabase response status=', result.status, 'body=', result.body);
     if (result.status >= 200 && result.status < 300) {
       res.json({ success: true, data: result.body, message: 'Vote cast successfully' });
     } else {
+      // Surface the PostgREST response body to the client for debugging
       res.status(result.status).json({ success: false, message: 'Failed to cast vote', error: result.body });
     }
   } catch (error) {
