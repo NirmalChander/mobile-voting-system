@@ -12,6 +12,7 @@ export default function FaceRegistration({ temporaryRegistrationData, onRegister
   const [scanMessage, setScanMessage] = useState('Loading face recognition models...');
   const navigate = useNavigate();
   const webcamRef = useRef(null);
+  const registeredRef = useRef(false);
 
   useEffect(() => {
     const loadModels = async () => {
@@ -47,11 +48,13 @@ export default function FaceRegistration({ temporaryRegistrationData, onRegister
       ).withFaceLandmarks().withFaceDescriptor();
 
       if (detection) {
+        if (registeredRef.current) return;
+        registeredRef.current = true;
         setStage('success');
         setScanMessage('Face Enrolled Successfully!');
         const generatedEpic = `IND${Math.floor(Math.random() * 9000000) + 1000000}`;
         setEpic(generatedEpic);
-        
+
         onRegisterVoter({
           ...temporaryRegistrationData,
           epic: generatedEpic,

@@ -68,9 +68,31 @@ function App() {
       });
       
       if (response.ok) {
-        // Also update local state
-        setVoters(prev => [...prev, voterData]);
+        const resJson = await response.json();
+        // Supabase returns an array of inserted rows under `data`
+        const created = resJson.data && resJson.data.length ? resJson.data[0] : null;
+        if (created) {
+          setVoters(prev => [...prev, created]);
+        } else {
+          setVoters(prev => [...prev, voterData]);
+        }
       } else {
+        // If conflict, try to fetch existing voter from backend
+        if (response.status === 409) {
+          try {
+            const usersRes = await fetch('http://localhost:5000/api/users');
+            if (usersRes.ok) {
+              const usersJson = await usersRes.json();
+              const existing = (usersJson.data || []).find(u => u.epic === voterData.epic);
+              if (existing) {
+                setVoters(prev => [...prev, existing]);
+                return;
+              }
+            }
+          } catch (err) {
+            console.error('Error fetching users after conflict:', err);
+          }
+        }
         console.error('Failed to register voter in backend');
       }
     } catch (error) {
@@ -94,8 +116,14 @@ function App() {
       });
       
       if (response.ok) {
-        // Also update local state
-        setVotes(prev => [...prev, voteData]);
+        // Re-fetch votes from backend to ensure authoritative state
+        const votesRes = await fetch('http://localhost:5000/api/votes');
+        if (votesRes.ok) {
+          const votesData = await votesRes.json();
+          setVotes(votesData.data || []);
+        } else {
+          setVotes(prev => [...prev, voteData]);
+        }
         setCurrentUser(prev => ({ ...prev, votedFor: voteData.candidateId }));
       } else {
         console.error('Failed to cast vote in backend');
