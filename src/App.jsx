@@ -55,6 +55,7 @@ function App() {
 
   const handleRegisterVoter = async (voterData) => {
     try {
+      console.log('[handleRegisterVoter] sending', voterData);
       // Call backend API to register voter (server will generate EPIC)
       const response = await fetch('http://localhost:5000/api/register-voter', {
         method: 'POST',
@@ -66,8 +67,11 @@ function App() {
         })
       });
 
+      console.log('[handleRegisterVoter] response status', response.status);
+
       if (response.ok) {
         const resJson = await response.json();
+        console.log('[handleRegisterVoter] response json', resJson);
         // resJson.data may be an array
         const created = Array.isArray(resJson.data) && resJson.data.length ? resJson.data[0] : resJson.data || null;
         if (created) {

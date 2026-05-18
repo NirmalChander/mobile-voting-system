@@ -35,6 +35,14 @@ export default function FaceRegistration({ temporaryRegistrationData, onRegister
     loadModels();
   }, []);
 
+  // Redirect back if registration data is missing
+  useEffect(() => {
+    if (!temporaryRegistrationData) {
+      console.warn('[FaceRegistration] missing temporaryRegistrationData, redirecting to /register');
+      navigate('/register');
+    }
+  }, [temporaryRegistrationData, navigate]);
+
   const detectFace = useCallback(async () => {
     if (stage !== 'scanning' || !modelsLoaded || !webcamRef.current || !webcamRef.current.video) return;
     

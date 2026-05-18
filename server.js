@@ -42,6 +42,7 @@ function supabaseRequest(table, method = 'GET', body = null, query = '') {
 
     const options = { method: method, headers };
 
+    console.log('[supabaseRequest] ', method, url.href);
     const req = https.request(url, options, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
@@ -52,6 +53,7 @@ function supabaseRequest(table, method = 'GET', body = null, query = '') {
           } catch (e) {
             parsed = null;
           }
+          console.log('[supabaseResponse] ', method, url.pathname, 'status=', res.statusCode, 'body=', parsed);
           resolve({
             status: res.statusCode,
             body: parsed
@@ -87,10 +89,13 @@ app.get('/api/users', async (req, res) => {
 // Register a voter endpoint
 app.post('/api/register-voter', async (req, res) => {
   try {
+    console.log('[register-voter] received request');
+    console.log('[register-voter] body:', JSON.stringify(req.body));
     if (!SUPABASE_URL || !SUPABASE_KEY) {
+      console.error('[register-voter] Supabase not configured');
       return res.status(500).json({ success: false, message: 'Supabase not configured' });
     }
-    
+
     let { epic, name, aadhaar, faceRegistered } = req.body;
 
     if (!name || !aadhaar) {
@@ -146,6 +151,7 @@ app.post('/api/register-voter', async (req, res) => {
       res.status(result.status).json({ success: false, message: 'Failed to register voter', error: result.body });
     }
   } catch (error) {
+    console.error('[register-voter] unexpected error:', error.stack || error);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 });
@@ -172,6 +178,7 @@ app.get('/api/votes', async (req, res) => {
 // Cast a vote endpoint
 app.post('/api/votes', async (req, res) => {
   try {
+    console.log('[cast-vote] request body:', JSON.stringify(req.body));
     if (!SUPABASE_URL || !SUPABASE_KEY) {
       return res.status(500).json({ success: false, message: 'Supabase not configured' });
     }
