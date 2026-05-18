@@ -66,6 +66,11 @@ export default function FaceRegistration({ temporaryRegistrationData, onRegister
           const created = await onRegisterVoter(payload);
           if (created && created.epic) {
             setEpic(created.epic);
+            try { localStorage.setItem('lastEpic', created.epic); } catch {};
+            // Auto-navigate to success page shortly after enrollment
+            setTimeout(() => {
+              navigate('/register-success', { state: { epic: created.epic } });
+            }, 700);
           }
         } catch (err) {
           console.error('Registration API failed:', err);

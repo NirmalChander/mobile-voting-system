@@ -6,9 +6,10 @@ export default function RegisterSuccess() {
   const { state } = useLocation();
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
+  // Determine EPIC from navigation state or fallback to localStorage
+  const epic = state?.epic || (() => { try { return localStorage.getItem('lastEpic'); } catch { return null; } })();
 
-  // If accessed directly without state
-  if (!state?.epic) {
+  if (!epic) {
     return (
       <div className="auth-container glass-card" style={{ textAlign: 'center' }}>
         <p>Invalid Session. Please register.</p>
@@ -44,7 +45,7 @@ export default function RegisterSuccess() {
       }}>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Your Electronic Photo Identity Card</p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
-          <h2 style={{ fontSize: '2rem', color: 'var(--primary)', letterSpacing: '2px', fontFamily: 'monospace' }}>{state.epic}</h2>
+          <h2 style={{ fontSize: '2rem', color: 'var(--primary)', letterSpacing: '2px', fontFamily: 'monospace' }}>{epic}</h2>
           <button 
             onClick={handleCopy} 
             style={{ background: 'none', border: 'none', color: copied ? 'var(--success)' : 'var(--text-muted)', cursor: 'pointer', transition: 'color 0.2s' }}
