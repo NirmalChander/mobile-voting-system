@@ -74,6 +74,79 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
+// Register a voter endpoint
+app.post('/api/register-voter', async (req, res) => {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
+      return res.status(500).json({ success: false, message: 'Supabase not configured' });
+    }
+    
+    const { epic, name, aadhaar, faceRegistered } = req.body;
+    
+    if (!epic || !name || !aadhaar) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+    
+    const result = await supabaseRequest('voters', 'POST', 
+      { epic, name, aadhaar, faceregistered: faceRegistered || false }
+    );
+    
+    if (result.status >= 200 && result.status < 300) {
+      res.json({ success: true, data: result.body });
+    } else {
+      res.status(result.status).json({ success: false, message: 'Failed to register voter', error: result.body });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
+
+// Get all votes endpoint
+app.get('/api/votes', async (req, res) => {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
+      return res.status(500).json({ success: false, message: 'Supabase not configured' });
+    }
+    
+    const result = await supabaseRequest('votes', 'GET', null, 'select=*');
+    
+    if (result.status >= 200 && result.status < 300) {
+      res.json({ success: true, data: result.body });
+    } else {
+      res.status(result.status).json({ success: false, message: 'Failed to fetch votes', error: result.body });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
+
+// Cast a vote endpoint
+app.post('/api/votes', async (req, res) => {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
+      return res.status(500).json({ success: false, message: 'Supabase not configured' });
+    }
+    
+    const { epic, candidateId, timestamp } = req.body;
+    
+    if (!epic || !candidateId) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+    
+    const result = await supabaseRequest('votes', 'POST', 
+      { epic, candidateid: candidateId, timestamp: timestamp || new Date().toISOString() }
+    );
+    
+    if (result.status >= 200 && result.status < 300) {
+      res.json({ success: true, data: result.body, message: 'Vote cast successfully' });
+    } else {
+      res.status(result.status).json({ success: false, message: 'Failed to cast vote', error: result.body });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
+
 // Add your API routes here
 // app.use('/api/users', userRoutes);
 

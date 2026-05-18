@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 // Pages
@@ -27,13 +27,85 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null); // { epic, aadhaarVerified, faceVerified, votedFor }
   const [adminLoggedIn, setAdminLoggedIn] = useState(false);
 
-  const handleRegisterVoter = (voterData) => {
-    setVoters(prev => [...prev, voterData]);
+  // Load voters and votes from backend on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [votersRes, votesRes] = await Promise.all([
+          fetch('http://localhost:5000/api/users'),
+          fetch('http://localhost:5000/api/votes')
+        ]);
+        
+        if (votersRes.ok) {
+          const votersData = await votersRes.json();
+          setVoters(votersData.data || []);
+        }
+        
+        if (votesRes.ok) {
+          const votesData = await votesRes.json();
+          setVotes(votesData.data || []);
+        }
+      } catch (error) {
+        console.error('Failed to load data from backend:', error);
+      }
+    };
+    
+    fetchData();
+  }, []);
+
+  const handleRegisterVoter = async (voterData) => {
+    try {
+      // Call backend API to register voter
+      const response = await fetch('http://localhost:5000/api/register-voter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          epic: voterData.epic,
+          name: voterData.name,
+          aadhaar: voterData.aadhaar,
+          faceRegistered: voterData.faceRegistered
+        })
+      });
+      
+      if (response.ok) {
+        // Also update local state
+        setVoters(prev => [...prev, voterData]);
+      } else {
+        console.error('Failed to register voter in backend');
+      }
+    } catch (error) {
+      console.error('Error registering voter:', error);
+      // Still update local state even if backend fails (graceful fallback)
+      setVoters(prev => [...prev, voterData]);
+    }
   };
 
-  const handleCastVote = (voteData) => {
-    setVotes(prev => [...prev, voteData]);
-    setCurrentUser(prev => ({ ...prev, votedFor: voteData.candidateId }));
+  const handleCastVote = async (voteData) => {
+    try {
+      // Call backend API to cast vote
+      const response = await fetch('http://localhost:5000/api/votes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          epic: voteData.epic,
+          candidateId: voteData.candidateId,
+          timestamp: voteData.timestamp
+        })
+      });
+      
+      if (response.ok) {
+        // Also update local state
+        setVotes(prev => [...prev, voteData]);
+        setCurrentUser(prev => ({ ...prev, votedFor: voteData.candidateId }));
+      } else {
+        console.error('Failed to cast vote in backend');
+      }
+    } catch (error) {
+      console.error('Error casting vote:', error);
+      // Still update local state even if backend fails (graceful fallback)
+      setVotes(prev => [...prev, voteData]);
+      setCurrentUser(prev => ({ ...prev, votedFor: voteData.candidateId }));
+    }
   };
 
   return (
