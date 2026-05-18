@@ -12,17 +12,29 @@ export default function FaceVerification({ user, setUser }) {
   const navigate = useNavigate();
   const webcamRef = useRef(null);
 
+  // Resolve enrolled descriptor from user object or localStorage. Normalize to number[]
   const resolvedFaceDescriptor = (() => {
-    if (user?.faceDescriptor) return user.faceDescriptor;
-    if (!user?.epic) return null;
     try {
-      const cachedDescriptor = localStorage.getItem(`faceDescriptor:${user.epic}`);
-      return cachedDescriptor ? JSON.parse(cachedDescriptor) : null;
+      let desc = null;
+      if (user?.faceDescriptor) desc = user.faceDescriptor;
+      else if (user?.epic) {
+        const cachedDescriptor = localStorage.getItem(`faceDescriptor:${user.epic}`);
+        desc = cachedDescriptor ? JSON.parse(cachedDescriptor) : null;
+      }
+      if (!desc) return null;
+      // Normalize to number array
+      if (Array.isArray(desc)) return desc.map(v => Number(v));
+      return null;
     } catch (storageError) {
       console.warn('Failed to read cached face descriptor:', storageError);
       return null;
     }
   })();
+
+  // Keep recent distances to smooth transient mismatches
+  const distancesRef = useRef([]);
+  const MATCH_THRESHOLD = 0.60; // slightly more tolerant than before
+  const MAX_RECENT = 5;
 
   useEffect(() => {
     const loadModels = async () => {
@@ -59,27 +71,44 @@ export default function FaceVerification({ user, setUser }) {
 
       if (detection) {
         // Compare with enrolled descriptor
-          if (!resolvedFaceDescriptor) {
+        if (!resolvedFaceDescriptor) {
            setStage('failed');
            setScanMessage('No enrolled face found for this user.');
            return;
         }
 
-          const enrolledDescriptor = new Float32Array(resolvedFaceDescriptor);
+        // Ensure descriptor lengths match
+        if (!Array.isArray(resolvedFaceDescriptor) || resolvedFaceDescriptor.length !== detection.descriptor.length) {
+          console.warn('[face-verify] descriptor length mismatch', resolvedFaceDescriptor?.length, detection.descriptor.length);
+          setScanMessage('Enrolled descriptor incompatible with current model. Re-enroll face.');
+          return;
+        }
+
+        const enrolledDescriptor = new Float32Array(resolvedFaceDescriptor.map(v => Number(v)));
         const distance = faceapi.euclideanDistance(detection.descriptor, enrolledDescriptor);
-        
-        // Threshold: < 0.55 is a solid match.
-        if (distance < 0.55) {
+        console.debug('[face-verify] distance=', distance.toFixed(4));
+
+        // Keep sliding window of recent distances
+        distancesRef.current.push(distance);
+        if (distancesRef.current.length > MAX_RECENT) distancesRef.current.shift();
+        const minRecent = Math.min(...distancesRef.current);
+
+        setScanMessage(`Comparing... Distance: ${distance.toFixed(2)}`);
+
+        // Accept if any of recent distances are below threshold
+        if (minRecent < MATCH_THRESHOLD) {
           setStage('success');
           setScanMessage('Face Match Confirmed!');
-          
+
           setTimeout(() => {
             setUser({ ...user, faceVerified: true });
             navigate('/instructions');
-          }, 2000);
-        } else {
-          setScanMessage(`Face mismatch. Distance: ${distance.toFixed(2)}`);
+          }, 800);
+          return;
         }
+
+        // Otherwise prompt user to adjust
+        setScanMessage(`Face mismatch. Try centering your face. (Dist: ${distance.toFixed(2)})`);
       } else {
           setScanMessage('Keep face in frame...');
       }
