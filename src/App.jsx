@@ -104,28 +104,8 @@ function App() {
           return fallback;
         }
       } else {
-        // Handle conflict by refetching existing user
         if (response.status === 409) {
-          const usersRes = await fetch('http://localhost:5000/api/users');
-          if (usersRes.ok) {
-            const usersJson = await usersRes.json();
-            const existing = (usersJson.data || []).find(u => u.name === voterData.name);
-            if (existing) {
-              const merged = { ...existing };
-              if (voterData.faceDescriptor && !merged.faceDescriptor) {
-                merged.faceDescriptor = voterData.faceDescriptor;
-              }
-              if (merged.epic && merged.faceDescriptor) {
-                try {
-                  localStorage.setItem(`faceDescriptor:${merged.epic}`, JSON.stringify(merged.faceDescriptor));
-                } catch (storageError) {
-                  console.warn('Failed to cache conflicting face descriptor locally:', storageError);
-                }
-              }
-              setVoters(prev => [...prev, merged]);
-              return merged;
-            }
-          }
+          console.error('Registration conflict returned by backend. This should be resolved server-side, not by reusing an old voter.');
         }
         console.error('Failed to register voter in backend');
         return null;

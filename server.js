@@ -177,8 +177,14 @@ app.post('/api/register-voter', async (req, res) => {
           res.json({ success: true, data: [existing] });
           return;
         }
+        console.warn('[register-voter] duplicate insert did not resolve to an existing EPIC row; backend schema likely still rejects aadhaar duplicates');
       }
-      res.status(result.status).json({ success: false, message: 'Failed to register voter', error: result.body });
+      res.status(result.status).json({
+        success: false,
+        message: 'Failed to register voter',
+        error: result.body,
+        hint: 'If this is a 409 conflict, drop the unique constraint on voters.aadhaar in Supabase.'
+      });
     }
   } catch (error) {
     console.error('[register-voter] unexpected error:', error.stack || error);
