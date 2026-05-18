@@ -21,13 +21,25 @@ export default function Login({ setCurrentUser, voters, votes }) {
         return;
       }
 
+      let faceDescriptor = userRecord.faceDescriptor || null;
+      if (!faceDescriptor) {
+        try {
+          const cachedDescriptor = localStorage.getItem(`faceDescriptor:${epic}`);
+          if (cachedDescriptor) {
+            faceDescriptor = JSON.parse(cachedDescriptor);
+          }
+        } catch (storageError) {
+          console.warn('Failed to load cached face descriptor:', storageError);
+        }
+      }
+
       const hasVoted = votes.some(v => v.epic === epic);
       if (hasVoted) {
         setError('A vote has already been cast for this EPIC.');
         return;
       }
       
-      setCurrentUser({ ...userRecord, aadhaarVerified: false, faceVerified: false, votedFor: null });
+      setCurrentUser({ ...userRecord, faceDescriptor, aadhaarVerified: false, faceVerified: false, votedFor: null });
       navigate('/verify');
     }, 1000);
   };

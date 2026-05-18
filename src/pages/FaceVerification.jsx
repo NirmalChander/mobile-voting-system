@@ -12,6 +12,18 @@ export default function FaceVerification({ user, setUser }) {
   const navigate = useNavigate();
   const webcamRef = useRef(null);
 
+  const resolvedFaceDescriptor = (() => {
+    if (user?.faceDescriptor) return user.faceDescriptor;
+    if (!user?.epic) return null;
+    try {
+      const cachedDescriptor = localStorage.getItem(`faceDescriptor:${user.epic}`);
+      return cachedDescriptor ? JSON.parse(cachedDescriptor) : null;
+    } catch (storageError) {
+      console.warn('Failed to read cached face descriptor:', storageError);
+      return null;
+    }
+  })();
+
   useEffect(() => {
     const loadModels = async () => {
       try {
@@ -47,13 +59,13 @@ export default function FaceVerification({ user, setUser }) {
 
       if (detection) {
         // Compare with enrolled descriptor
-        if (!user.faceDescriptor) {
+          if (!resolvedFaceDescriptor) {
            setStage('failed');
            setScanMessage('No enrolled face found for this user.');
            return;
         }
 
-        const enrolledDescriptor = new Float32Array(user.faceDescriptor);
+          const enrolledDescriptor = new Float32Array(resolvedFaceDescriptor);
         const distance = faceapi.euclideanDistance(detection.descriptor, enrolledDescriptor);
         
         // Threshold: < 0.55 is a solid match.
@@ -74,7 +86,7 @@ export default function FaceVerification({ user, setUser }) {
     } catch (err) {
       console.error('Face verification error:', err);
     }
-  }, [stage, modelsLoaded, user, setUser, navigate]);
+  }, [stage, modelsLoaded, user, resolvedFaceDescriptor, setUser, navigate]);
 
   useEffect(() => {
     let interval;

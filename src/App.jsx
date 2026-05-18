@@ -75,11 +75,33 @@ function App() {
         // resJson.data may be an array
         const created = Array.isArray(resJson.data) && resJson.data.length ? resJson.data[0] : resJson.data || null;
         if (created) {
-          setVoters(prev => [...prev, created]);
-          return created;
+          const merged = { ...created };
+          if (voterData.faceDescriptor && !merged.faceDescriptor) {
+            merged.faceDescriptor = voterData.faceDescriptor;
+          }
+          if (voterData.registeredAt && !merged.registeredAt) {
+            merged.registeredAt = voterData.registeredAt;
+          }
+          if (merged.epic && merged.faceDescriptor) {
+            try {
+              localStorage.setItem(`faceDescriptor:${merged.epic}`, JSON.stringify(merged.faceDescriptor));
+            } catch (storageError) {
+              console.warn('Failed to cache face descriptor locally:', storageError);
+            }
+          }
+          setVoters(prev => [...prev, merged]);
+          return merged;
         } else {
-          setVoters(prev => [...prev, voterData]);
-          return voterData;
+          const fallback = { ...voterData };
+          if (fallback.epic && fallback.faceDescriptor) {
+            try {
+              localStorage.setItem(`faceDescriptor:${fallback.epic}`, JSON.stringify(fallback.faceDescriptor));
+            } catch (storageError) {
+              console.warn('Failed to cache fallback face descriptor locally:', storageError);
+            }
+          }
+          setVoters(prev => [...prev, fallback]);
+          return fallback;
         }
       } else {
         // Handle conflict by refetching existing user
@@ -89,8 +111,19 @@ function App() {
             const usersJson = await usersRes.json();
             const existing = (usersJson.data || []).find(u => u.aadhaar === voterData.aadhaar || u.name === voterData.name);
             if (existing) {
-              setVoters(prev => [...prev, existing]);
-              return existing;
+              const merged = { ...existing };
+              if (voterData.faceDescriptor && !merged.faceDescriptor) {
+                merged.faceDescriptor = voterData.faceDescriptor;
+              }
+              if (merged.epic && merged.faceDescriptor) {
+                try {
+                  localStorage.setItem(`faceDescriptor:${merged.epic}`, JSON.stringify(merged.faceDescriptor));
+                } catch (storageError) {
+                  console.warn('Failed to cache conflicting face descriptor locally:', storageError);
+                }
+              }
+              setVoters(prev => [...prev, merged]);
+              return merged;
             }
           }
         }
